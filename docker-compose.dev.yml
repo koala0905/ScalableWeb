@@ -3,11 +3,15 @@ services:
     build:
       target: development
       context: ./web
+    container_name: scalable-web-dev
     volumes:
-      - ./web/src:/app # 掛載原始碼實作 Hot Reload
-      - /app/node_modules # 匿名掛載，保護容器內的 Linux 版套件
+      - ./web:/app # 掛載原始碼實作 Hot Reload
+      - web_node_modules:/app/node_modules # 匿名掛載，保護容器內的 Linux 版套件
     ports:
       - "3000:3000"
     environment:
       - APP_NAME=Dev-Server
-    command: tail -f /dev/null # 讓容器持續運行，方便進入容器內執行開發相關指令
+    command: npm run dev
+
+volumes:
+  web_node_modules:

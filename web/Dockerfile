@@ -1,7 +1,7 @@
 # --- Base Stage ---
 FROM node:lts-alpine AS base
 WORKDIR /app
-COPY src .
+COPY . .
 
 # --- Development Stage ---
 FROM base AS development
@@ -14,3 +14,4 @@ RUN npm ci --only=production
 COPY --chown=node:node . .
 ENV NODE_ENV=production
 USER node
+CMD ["node", "src/app.js"]
