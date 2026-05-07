@@ -14,4 +14,4 @@ RUN npm ci --only=production
 COPY --chown=node:node . .
 ENV NODE_ENV=production
 USER node
-CMD ["node", "src/app.js"]
+CMD ["node", "src/index.js"]

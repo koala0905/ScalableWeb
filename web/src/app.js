@@ -1,15 +1,40 @@
 const express = require("express");
-const os = require("os");
+const session = require("express-session");
+const { RedisStore } = require("connect-redis");
+const { redisClient } = require("./config/redis");
+const sessionMiddleware = require("./middleware/session");
+const routes = require("./routes");
+
 const app = express();
 
-app.get("/", (req, res) => {
-  res.json({
-    message: `Hello from ${process.env.APP_NAME || "Node"}`,
-    hostname: os.hostname(),
-    platform: os.platform(),
-    timestamp: new Date().toISOString(),
-    via_nginx: req.headers["x-forwarded-for"] || "direct access",
-  });
-});
+app.use(express.json());
+app.use(
+  session({
+    name: "_sid",
+    store: new RedisStore({
+      prefix: "session:",
+      client: redisClient,
+      disableTouch: false,
+      disableTTL: true,
+    }),
+    secret: process.env.SESSION_SECRET || "gfox:ym1Or!}(Otc",
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      maxAge: 3600000,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production" ? true : false,
+    },
+  }),
+);
 
-app.listen(3000, () => console.log("Server is running on port 3000"));
+console.log(
+  "Session middleware configured with secret:",
+  process.env.SESSION_SECRET,
+);
+// 掛載路由
+app.use("/", sessionMiddleware, routes);
+
+module.exports = app;

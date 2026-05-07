@@ -3,15 +3,148 @@ services:
     build:
       target: development
       context: ./web
-    container_name: scalable-web-dev
+    deploy:
+      replicas: 2
     volumes:
       - ./web:/app # 掛載原始碼實作 Hot Reload
       - web_node_modules:/app/node_modules # 匿名掛載，保護容器內的 Linux 版套件
-    ports:
-      - "3000:3000"
     environment:
       - APP_NAME=Dev-Server
+      - REDIS_MASTER_HOST=${REDIS_MASTER_HOST}
+      - REDIS_SLAVE_HOST=${REDIS_SLAVE_HOST}
+      - NODE_ENV=development
+      - SESSION_SECRET=${SESSION_SECRET}
+    networks:
+      - scalableweb_public_network
+      - scalableweb_private_network
     command: npm run dev
+
+  redis-master:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-master-dev
+    command: redis-server --replica-announce-ip 10.2.1.10 --bind 0.0.0.0 --protected-mode no
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.10
+        aliases:
+          - redis-master
+
+  redis-slave-1:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-slave-1-dev
+    volumes:
+      - ./redis/redis-slave.conf:/usr/local/etc/redis/redis.conf.init:ro
+    depends_on:
+      - redis-master
+    #command: redis-server --replicaof redis-master 6379
+    # command: >
+    #   sh -c "cp /usr/local/etc/redis/redis.conf.init /usr/local/etc/redis/redis.conf &&
+    #          chown redis:redis /usr/local/etc/redis/redis.conf &&
+    #          redis-server /usr/local/etc/redis/redis.conf"
+    command: redis-server --replicaof 10.2.1.10 6379 --replica-announce-ip 10.2.1.11 --bind 0.0.0.0 --protected-mode no
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.11
+        aliases:
+          - redis-slave-1
+
+  redis-slave-2:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-slave-2-dev
+    volumes:
+      - ./redis/redis-slave.conf:/usr/local/etc/redis/redis.conf.init:ro
+    depends_on:
+      - redis-master
+    #command: redis-server --replicaof redis-master 6379
+    # command: >
+    #   sh -c "cp /usr/local/etc/redis/redis.conf.init /usr/local/etc/redis/redis.conf &&
+    #          chown redis:redis /usr/local/etc/redis/redis.conf &&
+    #          redis-server /usr/local/etc/redis/redis.conf"
+    command: redis-server --replicaof 10.2.1.10 6379 --replica-announce-ip 10.2.1.12 --bind 0.0.0.0 --protected-mode no
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.12
+        aliases:
+          - redis-slave-2
+
+  # Sentinel 節點 1
+  sentinel-1:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-sentinel-1
+    volumes:
+      - ./sentinel/sentinel.conf:/etc/redis/sentinel.conf.init:ro
+    command: >
+      sh -c "cp /etc/redis/sentinel.conf.init /etc/redis/sentinel.conf && 
+             chown redis:redis /etc/redis/sentinel.conf &&
+             redis-sentinel /etc/redis/sentinel.conf --sentinel announce-ip 10.2.1.20 --sentinel announce-port 26379"
+    depends_on:
+      - redis-master
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.20
+        aliases:
+          - redis-sentinel-1
+
+  # Sentinel 節點 2
+  sentinel-2:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-sentinel-2
+    volumes:
+      - ./sentinel/sentinel.conf:/etc/redis/sentinel.conf.init:ro
+    command: >
+      sh -c "cp /etc/redis/sentinel.conf.init /etc/redis/sentinel.conf && 
+             chown redis:redis /etc/redis/sentinel.conf &&
+             redis-sentinel /etc/redis/sentinel.conf --sentinel announce-ip 10.2.1.21 --sentinel announce-port 26379"
+    depends_on:
+      - redis-master
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.21
+        aliases:
+          - redis-sentinel-2
+
+  # Sentinel 節點 3
+  sentinel-3:
+    image: redis:8.2.2-alpine3.22
+    container_name: redis-sentinel-3
+    volumes:
+      - ./sentinel/sentinel.conf:/etc/redis/sentinel.conf.init:ro
+    command: >
+      sh -c "cp /etc/redis/sentinel.conf.init /etc/redis/sentinel.conf && 
+             chown redis:redis /etc/redis/sentinel.conf &&
+             redis-sentinel /etc/redis/sentinel.conf --sentinel announce-ip 10.2.1.22 --sentinel announce-port 26379"
+    depends_on:
+      - redis-master
+    networks:
+      scalableweb_private_network:
+        ipv4_address: 10.2.1.22
+        aliases:
+          - redis-sentinel-3
+
+  nginx:
+    image: nginx:1.29.1-alpine3.22-perl
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - web
+    networks:
+      - scalableweb_public_network
 
 volumes:
   web_node_modules:
+
+networks:
+  scalableweb_public_network:
+    name: scalableweb_public_network
+    ipam:
+      config:
+        - subnet: 10.1.0.0/16
+
+  scalableweb_private_network:
+    name: scalableweb_private_network
+    ipam:
+      config:
+        - subnet: 10.2.0.0/16
+          ip_range: 10.2.0.0/24

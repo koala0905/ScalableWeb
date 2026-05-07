@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redis Session 驗證測試</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 40px;
+        background-color: #f0f2f5;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        color: #1a73e8;
+        margin-top: 0;
+      }
+      .status-box {
+        background: #f8f9fa;
+        border-left: 5px solid #1a73e8;
+        padding: 15px;
+        margin: 20px 0;
+        font-family: monospace;
+        word-break: break-all;
+      }
+      .label {
+        font-weight: bold;
+        color: #5f6368;
+      }
+      .tag {
+        display: inline-block;
+        background: #e8f0fe;
+        color: #1967d2;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .info-text {
+        font-size: 0.9em;
+        color: #70757a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Redis 分散式 Session 驗證</h2>
+      <p class="info-text">
+        此頁面會自動檢查 HttpOnly Cookie 並從 Redis 讀取狀態。
+      </p>
+
+      <div class="status-box" id="status-content">正在驗證 Session 狀態...</div>
+
+      <div id="session-details" style="display: none">
+        <p>
+          <span class="label">Session ID:</span>
+          <span id="session-id" class="tag"></span>
+        </p>
+        <p>
+          <span class="label">處理請求的容器:</span>
+          <span id="handled-by" class="tag"></span>
+        </p>
+        <!-- <p>
+          <span class="label">Session 建立時間:</span> <br /><small
+            id="created-at"
+          ></small>
+        </p> -->
+      </div>
+
+      <hr />
+      <button onclick="location.reload()">重新整理頁面</button>
+      <p class="info-text">
+        提示：開啟瀏覽器開發者工具 (F12) 的 Application > Cookies 分頁，你會看到
+        session_id 被標記為 <strong>HttpOnly</strong>，這表示 JavaScript
+        無法透過 <code>document.cookie</code> 存取它。
+      </p>
+    </div>
+
+    <script>
+      // 頁面載入時立即呼叫後端 API 進行驗證
+      async function checkSession() {
+        const statusContent = document.getElementById("status-content");
+        const details = document.getElementById("session-details");
+
+        try {
+          const response = await fetch("/api/me");
+          const data = await response.json();
+
+          //if response http 200 and data.success is true, then session is valid
+          if (response.ok && data.success) {
+            statusContent.innerHTML = "✅ Session 驗證成功（資料來自 Redis）";
+            statusContent.style.borderColor = "#34a853";
+
+            // 顯示詳細資訊
+            details.style.display = "block";
+            document.getElementById("session-id").innerText = data.sessionId;
+            document.getElementById("handled-by").innerText = data.handledBy;
+            // document.getElementById("created-at").innerText =data.sessionData.created_at;
+
+            console.log("當前 Session 數據:", data.sessionData);
+          } else {
+            statusContent.innerHTML = "❌ Session 無效或已過期";
+            statusContent.style.borderColor = "#ea4335";
+            console.warn("Session 驗證失敗:", data);
+          }
+        } catch (error) {
+          statusContent.innerHTML = "⚠️ 無法連線至伺服器";
+          console.error("Fetch error:", error);
+        }
+      }
+
+      // 執行檢查
+      checkSession();
+    </script>
+  </body>
+</html>
